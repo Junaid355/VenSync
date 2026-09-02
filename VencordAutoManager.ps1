@@ -40,7 +40,7 @@ function Test-VencordPatched {
     $pattern = "$env:LOCALAPPDATA\Discord*\app-*\modules\discord_desktop_core-*\discord_desktop_core\index.js"
     $files = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
     foreach ($f in $files) {
-        $content = Get-Content -Path $f.FullName -TotalCount 10 -Raw -ErrorAction SilentlyContinue
+        $content = Get-Content -Path $f.FullName -Raw -ErrorAction SilentlyContinue
         if ($content -match "vencord|patcher") { return $true }
     }
     return $false
