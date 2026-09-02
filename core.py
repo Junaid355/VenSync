@@ -68,11 +68,27 @@ class DiscordDetector:
 
     @staticmethod
     def is_vencord_patched() -> bool:
-        """Checks if Vencord is currently injected into Discord's desktop_core."""
-        # Find desktop_core index.js
-        pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "modules", "discord_desktop_core-*", "discord_desktop_core", "index.js")
-        matches = glob.glob(pattern)
+        """Checks if Vencord is currently injected into Discord."""
+        # 1. Check resources loader & backup
+        backup_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "resources", "_app.asar")
+        if glob.glob(backup_pattern):
+            return True
+
+        # 2. Check app.asar content
+        asar_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "resources", "app.asar")
+        matches = glob.glob(asar_pattern)
         for path in matches:
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read(500)
+                    if "vencord" in content.lower() or "patcher" in content.lower():
+                        return True
+            except Exception:
+                pass
+
+        # 3. Check desktop_core index.js
+        core_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "modules", "discord_desktop_core-*", "discord_desktop_core", "index.js")
+        for path in glob.glob(core_pattern):
             try:
                 with open(path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read(500)
