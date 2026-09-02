@@ -37,6 +37,19 @@ function Get-DiscordPath {
 }
 
 function Test-VencordPatched {
+    # 1. Check resources backup
+    $backupPattern = "$env:LOCALAPPDATA\Discord*\app-*\resources\_app.asar"
+    if (Get-ChildItem -Path $backupPattern -ErrorAction SilentlyContinue) { return $true }
+
+    # 2. Check app.asar
+    $asarPattern = "$env:LOCALAPPDATA\Discord*\app-*\resources\app.asar"
+    $files = Get-ChildItem -Path $asarPattern -ErrorAction SilentlyContinue
+    foreach ($f in $files) {
+        $content = Get-Content -Path $f.FullName -Raw -ErrorAction SilentlyContinue
+        if ($content -match "vencord|patcher") { return $true }
+    }
+
+    # 3. Check desktop_core
     $pattern = "$env:LOCALAPPDATA\Discord*\app-*\modules\discord_desktop_core-*\discord_desktop_core\index.js"
     $files = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue
     foreach ($f in $files) {
