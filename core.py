@@ -58,45 +58,82 @@ class DiscordDetector:
 
     @staticmethod
     def is_vencord_files_present() -> bool:
-        vencord_dir = os.path.join(APPDATA, "Vencord", "dist")
-        if os.path.exists(vencord_dir) and (
-            os.path.exists(os.path.join(vencord_dir, "vencord.asar")) or
-            os.path.exists(os.path.join(vencord_dir, "index.js"))
-        ):
-            return True
+        for base in [APPDATA, LOCALAPPDATA]:
+            vencord_dir = os.path.join(base, "Vencord", "dist")
+            if os.path.exists(vencord_dir):
+                for target_file in ["patcher.js", "vencord.asar", "preload.js", "index.js", "renderer.js"]:
+                    if os.path.exists(os.path.join(vencord_dir, target_file)):
+                        return True
         return False
 
     @staticmethod
+    def get_latest_discord_app_dirs():
+        branches = ["Discord", "DiscordCanary", "DiscordPTB", "DiscordDevelopment"]
+        app_dirs = []
+        for branch in branches:
+            branch_dir = os.path.join(LOCALAPPDATA, branch)
+            if os.path.exists(branch_dir) and os.path.isdir(branch_dir):
+                subdirs = [os.path.join(branch_dir, d) for d in os.listdir(branch_dir) if d.startswith("app-") and os.path.isdir(os.path.join(branch_dir, d))]
+                if subdirs:
+                    subdirs.sort(key=lambda s: os.path.basename(s), reverse=True)
+                    app_dirs.append(subdirs[0])
+        return app_dirs
+
+    @staticmethod
     def is_vencord_patched() -> bool:
-        """Checks if Vencord is currently injected into Discord."""
-        # 1. Check resources loader & backup
-        backup_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "resources", "_app.asar")
-        if glob.glob(backup_pattern):
-            return True
+        """Checks if Vencord is currently injected into the active Discord installation(s)."""
+        latest_dirs = DiscordDetector.get_latest_discord_app_dirs()
+        if not latest_dirs:
+            return False
 
-        # 2. Check app.asar content
-        asar_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "resources", "app.asar")
-        matches = glob.glob(asar_pattern)
-        for path in matches:
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read(500)
-                    if "vencord" in content.lower() or "patcher" in content.lower():
-                        return True
-            except Exception:
-                pass
+        for app_dir in latest_dirs:
+            resources_dir = os.path.join(app_dir, "resources")
+            asar_path = os.path.join(resources_dir, "app.asar")
+            backup_asar = os.path.join(resources_dir, "_app.asar")
 
-        # 3. Check desktop_core index.js
-        core_pattern = os.path.join(LOCALAPPDATA, "Discord*", "app-*", "modules", "discord_desktop_core-*", "discord_desktop_core", "index.js")
-        for path in glob.glob(core_pattern):
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read(500)
-                    if "vencord" in content.lower() or "patcher" in content.lower():
-                        return True
-            except Exception:
-                pass
-        return False
+            patched = False
+            # 1. Check app.asar content
+            if os.path.exists(asar_path):
+                try:
+                    with open(asar_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read(500)
+                        if "vencord" in content.lower() or "patcher" in content.lower():
+                            patched = True
+                except Exception:
+                    pass
+
+            # 2. Check app folder fallback (resources/app/index.js)
+            app_index = os.path.join(resources_dir, "app", "index.js")
+            if not patched and os.path.exists(app_index):
+                try:
+                    with open(app_index, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read(500)
+                        if "vencord" in content.lower() or "patcher" in content.lower():
+                            patched = True
+                except Exception:
+                    pass
+
+            # 3. Check desktop_core index.js
+            modules_dir = os.path.join(app_dir, "modules")
+            if not patched and os.path.exists(modules_dir):
+                core_pattern = os.path.join(modules_dir, "discord_desktop_core-*", "discord_desktop_core", "index.js")
+                for path in glob.glob(core_pattern):
+                    try:
+                        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read(500)
+                            if "vencord" in content.lower() or "patcher" in content.lower():
+                                patched = True
+                    except Exception:
+                        pass
+
+            # 4. Check backup _app.asar presence in the active version folder
+            if not patched and os.path.exists(backup_asar):
+                patched = True
+
+            if not patched:
+                return False
+
+        return True
 
     @staticmethod
     def is_startup_enabled() -> bool:
@@ -194,7 +231,12 @@ class VencordManager:
             return False
 
     def get_or_download_vencord_cli(self) -> Optional[str]:
-        """Ensures VencordInstallerCli.exe is available in Temp directory."""
+        """Ensures VencordInstallerCli.exe is available (checks local directory first, then Temp)."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        local_cli = os.path.join(script_dir, "VencordInstallerCli.exe")
+        if os.path.exists(local_cli):
+            return local_cli
+
         temp_dir = os.path.join(LOCALAPPDATA, "Temp")
         cli_path = os.path.join(temp_dir, "VencordInstallerCli.exe")
 

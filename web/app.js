@@ -217,3 +217,8 @@ window.addEventListener('pywebviewready', () => {
 });
 
 setTimeout(refreshStatus, 300);
+setInterval(() => {
+    if (!isBusy) {
+        refreshStatus();
+    }
+}, 8000);
