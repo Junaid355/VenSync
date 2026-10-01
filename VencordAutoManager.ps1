@@ -47,15 +47,23 @@ function Get-ActiveDiscordInstallations {
         $dir = Join-Path $env:LOCALAPPDATA $branch
         if (Test-Path $dir) {
             $appDirs = Get-ChildItem -Path $dir -Directory -Filter "app-*" -ErrorAction SilentlyContinue | Sort-Object Name -Descending
-            if ($appDirs) {
-                $latestApp = $appDirs[0]
-                $exePath = Join-Path $latestApp.FullName "$branch.exe"
-                $resourcesPath = Join-Path $latestApp.FullName "resources"
+            $validApp = $null
+            foreach ($ad in $appDirs) {
+                $asarCheck = Join-Path $ad.FullName "resources\app.asar"
+                $backupCheck = Join-Path $ad.FullName "resources\_app.asar"
+                if ((Test-Path $asarCheck) -or (Test-Path $backupCheck)) {
+                    $validApp = $ad
+                    break
+                }
+            }
+            if ($validApp) {
+                $exePath = Join-Path $validApp.FullName "$branch.exe"
+                $resourcesPath = Join-Path $validApp.FullName "resources"
                 $asarPath = Join-Path $resourcesPath "app.asar"
                 $installations += [PSCustomObject]@{
                     Branch       = $branch
                     Directory    = $dir
-                    LatestAppDir = $latestApp.FullName
+                    LatestAppDir = $validApp.FullName
                     ExePath      = $exePath
                     ResourcesDir = $resourcesPath
                     AsarPath     = $asarPath

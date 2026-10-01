@@ -73,7 +73,13 @@ class DiscordDetector:
         for branch in branches:
             branch_dir = os.path.join(LOCALAPPDATA, branch)
             if os.path.exists(branch_dir) and os.path.isdir(branch_dir):
-                subdirs = [os.path.join(branch_dir, d) for d in os.listdir(branch_dir) if d.startswith("app-") and os.path.isdir(os.path.join(branch_dir, d))]
+                subdirs = []
+                for d in os.listdir(branch_dir):
+                    full_d = os.path.join(branch_dir, d)
+                    if d.startswith("app-") and os.path.isdir(full_d):
+                        res_dir = os.path.join(full_d, "resources")
+                        if os.path.exists(os.path.join(res_dir, "app.asar")) or os.path.exists(os.path.join(res_dir, "_app.asar")):
+                            subdirs.append(full_d)
                 if subdirs:
                     subdirs.sort(key=lambda s: os.path.basename(s), reverse=True)
                     app_dirs.append(subdirs[0])
@@ -259,7 +265,7 @@ class VencordManager:
         self.kill_discord()
         self._log("Injecting Vencord into Discord...", "info")
         try:
-            proc = subprocess.run([cli_path, "-install", "-branch", "auto"], capture_output=True, text=True, timeout=30)
+            proc = subprocess.run([cli_path, "-install", "-branch", "auto"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
             if proc.returncode == 0 or DiscordDetector.is_vencord_patched():
                 self._log("Vencord successfully installed and patched into Discord!", "success")
                 return True
@@ -278,14 +284,20 @@ class VencordManager:
             return False
 
         self.kill_discord()
-        self._log("Re-patching Vencord into Discord (Repair mode)...", "info")
+        self._log("Re-patching Vencord into Discord...", "info")
         try:
-            proc = subprocess.run([cli_path, "-repair", "-branch", "auto"], capture_output=True, text=True, timeout=30)
+            # First try repair
+            proc = subprocess.run([cli_path, "-repair", "-branch", "auto"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
             if proc.returncode == 0 or DiscordDetector.is_vencord_patched():
                 self._log("Vencord re-hooked successfully!", "success")
                 return True
             else:
-                self._log(f"Repair output: {proc.stdout} {proc.stderr}", "warning")
+                self._log("Repair mode pending, attempting full re-install...", "info")
+                proc2 = subprocess.run([cli_path, "-install", "-branch", "auto"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
+                if proc2.returncode == 0 or DiscordDetector.is_vencord_patched():
+                    self._log("Vencord patched successfully via install fallback!", "success")
+                    return True
+                self._log(f"Installer output: {proc2.stdout} {proc2.stderr}", "warning")
                 return False
         except Exception as e:
             self._log(f"Repair failed: {e}", "error")
